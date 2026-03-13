@@ -1,0 +1,28 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "xhsagent"
+version = "1.0.0"
+description = "XHS AI Agent rewritten in Python 3.11"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "APScheduler>=3.10,<4",
+    "playwright>=1.44,<2",
+    "PyYAML>=6.0,<7",
+    "requests>=2.32,<3",
+    "rich>=13.7,<14",
+]
+
+[project.scripts]
+xhsagent = "xhsagent.main:main"
+xhsagent-feishu-setup = "xhsagent.feishu_setup:main"
+
+[tool.setuptools]
+include-package-data = true
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["xhsagent*"]
