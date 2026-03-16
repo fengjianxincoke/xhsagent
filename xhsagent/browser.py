@@ -10,7 +10,7 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import quote
 
-from playwright.sync_api import Browser, BrowserContext, Page, Response, TimeoutError, sync_playwright
+from playwright.sync_api import Browser, BrowserContext, Error as PlaywrightError, Page, Response, TimeoutError, sync_playwright
 
 from .config import AppConfig
 
@@ -51,6 +51,7 @@ class BaseBrowser:
             "--disable-setuid-sandbox",
             "--no-first-run",
         ]
+        launch_proxy = self.build_launch_proxy(launch_args)
         headers = {"Accept-Language": "zh-CN,zh;q=0.9"}
         viewport = {
             "width": self.config.get_viewport_width(),
@@ -70,22 +71,30 @@ class BaseBrowser:
             elif self.config.is_save_session():
                 log.warning("未找到 Session 快照: %s，本次启动可能需要人工登录", session_path)
 
-            self.browser = self.playwright.chromium.launch(
-                headless=True,
-                args=launch_args,
-            )
+            launch_kwargs: dict[str, Any] = {
+                "headless": True,
+                "args": launch_args,
+            }
+            if launch_proxy:
+                launch_kwargs["proxy"] = launch_proxy
+
+            self.browser = self.playwright.chromium.launch(**launch_kwargs)
             self.context = self.browser.new_context(**context_kwargs)
             log.info("已启动无头浏览器（storageStateLoaded=%s）", has_session_snapshot)
         else:
-            self.context = self.playwright.chromium.launch_persistent_context(
-                user_data_dir=str(profile_dir),
-                headless=False,
-                locale=self.config.get_browser_locale(),
-                viewport=viewport,
-                user_agent=self.build_user_agent(),
-                extra_http_headers=headers,
-                args=launch_args,
-            )
+            launch_kwargs: dict[str, Any] = {
+                "user_data_dir": str(profile_dir),
+                "headless": False,
+                "locale": self.config.get_browser_locale(),
+                "viewport": viewport,
+                "user_agent": self.build_user_agent(),
+                "extra_http_headers": headers,
+                "args": launch_args,
+            }
+            if launch_proxy:
+                launch_kwargs["proxy"] = launch_proxy
+
+            self.context = self.playwright.chromium.launch_persistent_context(**launch_kwargs)
             self.browser = self.context.browser
             log.info("已加载%s浏览器 Profile: %s", self.platform_name, profile_dir)
 
@@ -115,6 +124,67 @@ class BaseBrowser:
         if self.platform_name == "xiaohongshu":
             return base
         return base.parent / f"{base.name}-{self.platform_name}"
+
+    def build_launch_proxy(self, launch_args: list[str]) -> dict[str, str] | None:
+        mode = self.config.get_browser_proxy_mode()
+        if mode == "direct":
+            launch_args.append("--no-proxy-server")
+            log.info("浏览器代理模式: direct（禁用系统代理）")
+            return None
+
+        if mode == "custom":
+            server = self.config.get_browser_proxy_server()
+            if not server:
+                log.warning("browser.proxy.mode=custom 但未配置 browser.proxy.server，已回退为 auto")
+                return None
+
+            proxy: dict[str, str] = {"server": server}
+            bypass = self.config.get_browser_proxy_bypass()
+            username = self.config.get_browser_proxy_username()
+            password = self.config.get_browser_proxy_password()
+            if bypass:
+                proxy["bypass"] = bypass
+            if username:
+                proxy["username"] = username
+            if password:
+                proxy["password"] = password
+            log.info("浏览器代理模式: custom（server=%s）", self.mask_proxy_server(server))
+            return proxy
+
+        log.info("浏览器代理模式: auto（跟随系统网络设置）")
+        return None
+
+    def mask_proxy_server(self, server: str) -> str:
+        return re.sub(r"//([^:@/]+):([^@/]+)@", r"//\1:***@", server)
+
+    def goto_with_handling(self, url: str, *, page: Page | None = None) -> bool:
+        active_page = page or self.page
+        assert active_page is not None
+        try:
+            active_page.goto(url, wait_until="domcontentloaded")
+            return True
+        except PlaywrightError as exc:
+            self.log_navigation_error(url, exc)
+            return False
+
+    def log_navigation_error(self, url: str, exc: Exception) -> None:
+        message = str(exc)
+        lowered = message.lower()
+
+        log.error("❌ %s 页面访问失败: %s", self.get_platform_label(), url)
+        if "err_tunnel_connection_failed" in lowered:
+            log.error("   当前浏览器代理隧道不可用，Chromium 无法建立到目标站点的连接。")
+            log.error("   可在 settings.yaml 中设置 browser.proxy.mode: direct 关闭系统代理，或改为 custom 并填写可用代理。")
+        elif "err_proxy_connection_failed" in lowered:
+            log.error("   当前代理服务器连接失败，请检查代理地址、端口和本机代理软件状态。")
+        elif "err_name_not_resolved" in lowered:
+            log.error("   域名解析失败，请检查 DNS、网络连接或代理配置。")
+        elif "err_internet_disconnected" in lowered:
+            log.error("   当前网络未连接，浏览器无法访问目标站点。")
+        elif "timeout" in lowered:
+            log.error("   页面打开超时，请检查网络是否可访问目标站点。")
+        else:
+            log.error("   Playwright 导航异常: %s", message)
 
     def ensure_logged_in(self) -> bool:
         raise NotImplementedError
@@ -1855,7 +1925,9 @@ class XHSBrowser(BaseBrowser):
 
     def ensure_logged_in(self) -> bool:
         assert self.page is not None
-        self.page.goto(self.XHS_HOME, wait_until="domcontentloaded")
+        log.info("🔐 检查小红书登录状态...")
+        if not self.goto_with_handling(self.XHS_HOME):
+            return False
         self.human_delay(2000, 3000)
 
         if self.has_active_session():
@@ -2452,7 +2524,8 @@ class DOUYINBrowser(BaseBrowser):
     def ensure_logged_in(self) -> bool:
         assert self.page is not None
         log.info("🔐 检查抖音访问状态...")
-        self.page.goto(self.DOUYIN_HOME, wait_until="domcontentloaded")
+        if not self.goto_with_handling(self.DOUYIN_HOME):
+            return False
         self.human_delay(2000, 3000)
 
         if self.has_active_douyin_session():

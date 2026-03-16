@@ -133,6 +133,22 @@ class AppConfig:
         value = self._str("browser.profileDir")
         return value if value.strip() else "data/browser-profile"
 
+    def get_browser_proxy_mode(self) -> str:
+        value = self._str("browser.proxy.mode").strip().lower()
+        return value if value in {"auto", "direct", "custom"} else "auto"
+
+    def get_browser_proxy_server(self) -> str:
+        return self._str("browser.proxy.server").strip()
+
+    def get_browser_proxy_bypass(self) -> str:
+        return self._str("browser.proxy.bypass").strip()
+
+    def get_browser_proxy_username(self) -> str:
+        return self._str("browser.proxy.username").strip()
+
+    def get_browser_proxy_password(self) -> str:
+        return self._str("browser.proxy.password").strip()
+
     def get_db_path(self) -> str:
         return self._str("storage.dbPath")
 

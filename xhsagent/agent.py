@@ -63,7 +63,11 @@ class XHSAgent:
 
     def ensure_platform_ready(self, platform: str) -> bool:
         browser = self.platform_browsers[platform]
-        return self.platform_executors[platform].submit(browser.ensure_logged_in).result()
+        try:
+            return self.platform_executors[platform].submit(browser.ensure_logged_in).result()
+        except Exception as exc:
+            log.error("❌ 平台 [%s] 状态校验异常: %s", platform, exc, exc_info=True)
+            return False
 
     def request_stop(self) -> None:
         self._stop_requested.set()

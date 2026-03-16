@@ -124,6 +124,12 @@ browser:
   xhsSessionFile: "data/session_xhs.json"
   douyinSessionFile: "data/session_douyin.json"
   profileDir: "data/browser-profile"
+  proxy:
+    mode: "auto"
+    server: ""
+    bypass: ""
+    username: ""
+    password: ""
 
 storage:
   dbPath: "data/posts.db"
@@ -151,6 +157,7 @@ logging:
 | `comments.latestCsvOnly` | `true` 时每个平台只读取最新一个 CSV |
 | `comments.maxPerPlatform` | 每个平台最多评论多少条，`0` 为不限制 |
 | `browser.headless` | 是否无头运行；首次登录建议设为 `false` |
+| `browser.proxy.mode` | 浏览器代理模式：`auto` 跟随系统代理，`direct` 禁用系统代理直连，`custom` 使用自定义代理 |
 | `storage.dedupDays` | 指定时间窗口内按 `(platform, post_id)` 去重 |
 
 ## 运行说明
@@ -345,6 +352,7 @@ CSV 列包含：
 ## 注意事项
 
 - 首次登录或登录失效时，务必将 `browser.headless` 设为 `false`
+- 如果启动时出现 `ERR_TUNNEL_CONNECTION_FAILED`，通常是系统代理不可用；可将 `browser.proxy.mode` 设为 `direct` 后重试
 - 如果抖音开启失败，主程序会整体退出，不会只跑小红书
 - 评论任务依赖已有 CSV，不会主动触发采集
 - 依赖安装和 Playwright 浏览器下载需要联网
