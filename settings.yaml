@@ -14,9 +14,9 @@ keywords:
 
 # Claude API ─────────────────────────────────────────────────
 claude:
-  apiKey: "******" # 填写 newapi.tsingyuai.com 平台的 Key
-  apiUrl: "******" # OpenAI 兼容接口地址
-  model: "claude-haiku-4-5-20251001" # 填写平台支持的模型名，登录平台后在模型列表中确认
+  apiKey: "***" # 填写 newapi.tsingyuai.com 平台的 Key
+  apiUrl: "***" # OpenAI 兼容接口地址
+  model: "***" # 填写平台支持的模型名，登录平台后在模型列表中确认
   matchThreshold: 60
   maxTokens: 300
 
@@ -69,6 +69,12 @@ browser:
   xhsSessionFile: "data/session_xhs.json"
   douyinSessionFile: "data/session_douyin.json"
   profileDir: "data/browser-profile"
+  proxy:
+    mode: "auto" # auto = 跟随系统代理；direct = 禁用系统代理直连；custom = 使用下方代理
+    server: ""
+    bypass: ""
+    username: ""
+    password: ""
 
 # 数据存储 ────────────────────────────────────────────────
 storage:
